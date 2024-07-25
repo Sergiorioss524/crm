@@ -11,26 +11,46 @@ export const API_BASE_URL = "https://api.crm.refine.dev";
 export const API_URL = `${API_BASE_URL}/graphql`;
 export const WS_URL = "wss://api.crm.refine.dev/graphql";
 
+// Helper function to convert Axios response to Fetch response-like structure
+const axiosFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const { body, ...options } = init || {};
+
+  const requestConfig = {
+    url: typeof input === 'string' ? input : input.toString(),
+    method: options.method,
+    headers: options.headers as Record<string, string>,
+    data: body as
+        | ReadableStream<any>
+        | Blob
+        | ArrayBufferView
+        | ArrayBuffer
+        | FormData
+        | URLSearchParams
+        | string
+        | null
+        | undefined,
+  };
+
+  try {
+    const response = await axiosInstance.request(requestConfig);
+    return new Response(response.data, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers as unknown as HeadersInit,
+    });
+  } catch (error: any) {
+    const messages = error.response?.data?.errors?.map((err: any) => err.message)?.join("") || error.message;
+    const statusCode = error.response?.status || 500;
+
+    return new Response(null, {
+      status: statusCode,
+      statusText: messages,
+    });
+  }
+};
+
 export const client = new GraphQLClient(API_URL, {
-  fetch: async (url: string, options: any) => {
-    try {
-      const response = await axiosInstance.request({
-        data: options.body,
-        url,
-        ...options,
-      });
-
-      return { ...response, data: response.data };
-    } catch (error: any) {
-      const messages = error?.map((error: any) => error?.message)?.join("");
-      const code = error?.[0]?.extensions?.code;
-
-      return Promise.reject({
-        message: messages || JSON.stringify(error),
-        statusCode: code || 500,
-      });
-    }
-  },
+  fetch: axiosFetch,
 });
 
 export const wsClient = createClient({
